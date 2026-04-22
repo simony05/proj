@@ -1,0 +1,76 @@
+# ------------------------
+# Environment variables
+# ------------------------
+.env
+.env.local
+.env.*.local
+
+# ------------------------
+# Python backend
+# ------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+.venv/
+venv/
+env/
+
+*.egg-info/
+dist/
+build/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ------------------------
+# FastAPI / local runtime
+# ------------------------
+*.log
+
+# ------------------------
+# Data (IMPORTANT: RAG local storage)
+# ------------------------
+data/
+*.faiss
+*.index
+*.bin
+
+# If you want to keep structure but not files, use:
+# data/*
+# !data/.gitkeep
+
+# ------------------------
+# Frontend (React / Next / Vite)
+# ------------------------
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/dist/
+
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+
+# ------------------------
+# OS / Editor noise
+# ------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ------------------------
+# Optional: local FAISS + embeddings artifacts
+# ------------------------
+*.faiss
+*.pkl
+*.pickle
