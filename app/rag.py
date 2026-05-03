@@ -9,6 +9,7 @@ import pypdf
 
 from .embeddings import EMBEDDING_DIM, complete, embed_texts
 from .models import ChunkMeta, DocumentMeta
+from .workspace import list_documents, save_documents
 
 
 # ---------------------------------------------------------------------------
@@ -82,21 +83,20 @@ def _save_json(data: list, path: Path) -> None:
 # Ingest
 # ---------------------------------------------------------------------------
 
-def ingest_document(ws_dir: Path, workspace_id: str, file_path: Path) -> DocumentMeta:
-    doc = DocumentMeta(
-        document_id=str(uuid.uuid4()),
-        workspace_id=workspace_id,
-        file_path=str(file_path),
-        status="processing",
-        created_at=datetime.now(timezone.utc),
+
+def process_document(ws_dir: Path, document: DocumentMeta) -> DocumentMeta:
+    docs_list = list_documents(document.workspace_id)
+    updated_doc = document.model_copy(update={"status": "processing"})
+    save_documents(
+        document.workspace_id,
+        [
+            updated_doc if d.document_id == document.document_id else d
+            for d in docs_list
+        ],
     )
 
-    docs_list = _load_json(ws_dir / "documents.json")
-    docs_list.append(doc.model_dump(mode="json"))
-    _save_json(docs_list, ws_dir / "documents.json")
-
     try:
-        reader = pypdf.PdfReader(str(file_path))
+        reader = pypdf.PdfReader(document.file_path)
         full_text = "\n".join(page.extract_text() or "" for page in reader.pages)
 
         raw_chunks = chunk_text(full_text)
@@ -109,8 +109,8 @@ def ingest_document(ws_dir: Path, workspace_id: str, file_path: Path) -> Documen
         chunk_records = [
             ChunkMeta(
                 chunk_id=str(uuid.uuid4()),
-                workspace_id=workspace_id,
-                document_id=doc.document_id,
+                workspace_id=document.workspace_id,
+                document_id=document.document_id,
                 text=text,
                 created_at=now,
             )
@@ -125,21 +125,63 @@ def ingest_document(ws_dir: Path, workspace_id: str, file_path: Path) -> Documen
         existing_chunks.extend(c.model_dump(mode="json") for c in chunk_records)
         _save_json(existing_chunks, ws_dir / "chunks.json")
 
-        doc = doc.model_copy(update={"status": "ready"})
+        updated_doc = updated_doc.model_copy(update={"status": "ready"})
 
     except Exception:
-        doc = doc.model_copy(update={"status": "error"})
+        updated_doc = updated_doc.model_copy(update={"status": "failed"})
         raise
 
     finally:
-        docs_list = _load_json(ws_dir / "documents.json")
-        docs_list = [
-            doc.model_dump(mode="json") if d["document_id"] == doc.document_id else d
-            for d in docs_list
-        ]
-        _save_json(docs_list, ws_dir / "documents.json")
+        docs_list = list_documents(document.workspace_id)
+        save_documents(
+            document.workspace_id,
+            [
+                updated_doc if d.document_id == document.document_id else d
+                for d in docs_list
+            ],
+        )
 
-    return doc
+    return updated_doc
+
+
+def delete_document_and_rebuild(ws_dir: Path, workspace_id: str, document_id: str) -> bool:
+    documents = list_documents(workspace_id)
+    document = next((doc for doc in documents if doc.document_id == document_id), None)
+    if document is None:
+        return False
+
+    save_documents(
+        workspace_id,
+        [doc for doc in documents if doc.document_id != document_id],
+    )
+
+    file_path = Path(document.file_path)
+    if file_path.exists():
+        file_path.unlink()
+        parent_dir = file_path.parent
+        if parent_dir != ws_dir / "docs":
+            try:
+                parent_dir.rmdir()
+            except OSError:
+                pass
+
+    chunks_path = ws_dir / "chunks.json"
+    remaining_chunks = [
+        chunk for chunk in _load_json(chunks_path) if chunk["document_id"] != document_id
+    ]
+    _save_json(remaining_chunks, chunks_path)
+
+    index_path = ws_dir / "index.faiss"
+    if not remaining_chunks:
+        if index_path.exists():
+            index_path.unlink()
+        return True
+
+    rebuilt_index = faiss.IndexFlatL2(EMBEDDING_DIM)
+    embeddings = embed_texts([chunk["text"] for chunk in remaining_chunks])
+    rebuilt_index.add(np.array(embeddings, dtype=np.float32))
+    _save_index(rebuilt_index, ws_dir)
+    return True
 
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,8 @@ export interface DocumentMeta {
   document_id: string;
   workspace_id: string;
   file_path: string;
-  status: "processing" | "ready" | "error";
+  file_name: string;
+  status: "uploaded" | "processing" | "ready" | "failed";
   created_at: string;
 }
 
@@ -28,8 +29,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.status === 204 ? (undefined as T) : res.json();
 }
 
-export const getWorkspaces = (): Promise<Workspace[]> =>
-  request("/workspaces");
+export const getWorkspaces = (): Promise<Workspace[]> => request("/workspaces");
 
 export const createWorkspace = (name: string): Promise<Workspace> =>
   request("/workspaces", {
@@ -41,11 +41,22 @@ export const createWorkspace = (name: string): Promise<Workspace> =>
 export const deleteWorkspace = (workspaceId: string): Promise<void> =>
   request(`/workspaces/${workspaceId}`, { method: "DELETE" });
 
-export const uploadDocument = (workspaceId: string, file: File): Promise<DocumentMeta> => {
+export const getDocuments = (workspaceId: string): Promise<DocumentMeta[]> =>
+  request(`/workspaces/${workspaceId}/documents`);
+
+export const uploadDocuments = (workspaceId: string, files: File[]): Promise<DocumentMeta[]> => {
   const body = new FormData();
-  body.append("file", file);
+  for (const file of files) {
+    body.append("files", file);
+  }
   return request(`/workspaces/${workspaceId}/upload`, { method: "POST", body });
 };
+
+export const deleteDocument = (workspaceId: string, documentId: string): Promise<void> =>
+  request(`/workspaces/${workspaceId}/documents/${documentId}`, { method: "DELETE" });
+
+export const getDocumentDownloadUrl = (workspaceId: string, documentId: string): string =>
+  `${BASE}/workspaces/${workspaceId}/documents/${documentId}/download`;
 
 export const queryWorkspace = (workspaceId: string, query: string): Promise<QueryResponse> =>
   request(`/workspaces/${workspaceId}/query`, {

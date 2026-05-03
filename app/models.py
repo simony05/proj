@@ -22,8 +22,12 @@ class DocumentMeta(BaseModel):
     document_id: str
     workspace_id: str
     file_path: str
-    status: Literal["processing", "ready", "error"]
+    status: Literal["uploaded", "processing", "ready", "failed"]
     created_at: datetime
+
+
+class DocumentResponse(DocumentMeta):
+    file_name: str
 
 
 class ChunkMeta(BaseModel):

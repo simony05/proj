@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .models import WorkspaceMeta
+from .models import DocumentMeta, WorkspaceMeta
 
 DATA_DIR = Path("data")
 
@@ -15,6 +15,10 @@ def workspace_path(workspace_id: str) -> Path:
 
 def _metadata_path(workspace_id: str) -> Path:
     return workspace_path(workspace_id) / "metadata.json"
+
+
+def documents_path(workspace_id: str) -> Path:
+    return workspace_path(workspace_id) / "documents.json"
 
 
 def create_workspace(name: str) -> WorkspaceMeta:
@@ -45,6 +49,33 @@ def list_workspaces() -> list[WorkspaceMeta]:
             workspaces.append(WorkspaceMeta(**json.loads(meta_file.read_text(encoding="utf-8"))))
 
     return workspaces
+
+
+def list_documents(workspace_id: str) -> list[DocumentMeta]:
+    path = documents_path(workspace_id)
+    if not path.exists():
+        return []
+    return [DocumentMeta(**item) for item in json.loads(path.read_text(encoding="utf-8"))]
+
+
+def save_documents(workspace_id: str, documents: list[DocumentMeta]) -> None:
+    documents_path(workspace_id).write_text(
+        json.dumps([doc.model_dump(mode="json") for doc in documents], indent=2),
+        encoding="utf-8",
+    )
+
+
+def add_document(workspace_id: str, document: DocumentMeta) -> None:
+    documents = list_documents(workspace_id)
+    documents.append(document)
+    save_documents(workspace_id, documents)
+
+
+def get_document(workspace_id: str, document_id: str) -> DocumentMeta | None:
+    for document in list_documents(workspace_id):
+        if document.document_id == document_id:
+            return document
+    return None
 
 
 def delete_workspace(workspace_id: str) -> bool:
